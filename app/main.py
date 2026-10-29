@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,8 +17,8 @@ try:  # trust the OS certificate store (corporate proxies / antivirus TLS inspec
 except ImportError:
     pass
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
@@ -28,8 +30,35 @@ log = logging.getLogger("scamshield")
 STATIC = Path(__file__).parent / "static"
 MOCK = os.getenv("MOCK_MODE", "0") == "1"
 
+LANGUAGES = {"English", "Hindi", "Telugu", "Tamil", "Kannada", "Marathi", "Bengali", "Malayalam", "Gujarati", "Spanish"}
+REGIONS = {"India", "United States", "United Kingdom", "Other"}
+
+# Abuse protection for the public demo: per-IP sliding window + global daily cap.
+PER_IP_LIMIT = int(os.getenv("PER_IP_LIMIT", "15"))  # requests per 10 minutes
+DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "1500"))
+_hits: dict[str, deque] = defaultdict(deque)
+_day = {"date": "", "count": 0}
+
 llm = TokenFactory()
 tavily = Tavily()
+
+
+def rate_limited(request: Request) -> str | None:
+    now = time.time()
+    today = time.strftime("%Y-%m-%d")
+    if _day["date"] != today:
+        _day.update(date=today, count=0)
+    if _day["count"] >= DAILY_LIMIT:
+        return "The public demo has reached today's limit. Please try again tomorrow or run it locally."
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
+    q = _hits[ip]
+    while q and now - q[0] > 600:
+        q.popleft()
+    if len(q) >= PER_IP_LIMIT:
+        return "Too many checks in a short time. Please wait a few minutes."
+    q.append(now)
+    _day["count"] += 1
+    return None
 
 
 @asynccontextmanager
@@ -64,12 +93,16 @@ async def health():
 
 
 @app.post("/api/analyze")
-async def analyze(req: AnalyzeRequest):
+async def analyze(req: AnalyzeRequest, request: Request):
+    if msg := rate_limited(request):
+        return JSONResponse({"detail": msg}, status_code=429)
+    language = req.language if req.language in LANGUAGES else "English"
+    region = req.region if req.region in REGIONS else "Other"
     image = req.image if req.image and req.image.startswith("data:image/") and len(req.image) < 8_000_000 else None
 
     async def stream():
         try:
-            async for ev in pipeline.run(req.text, image, req.language, req.region, llm, tavily, mock=MOCK or not llm.configured):
+            async for ev in pipeline.run(req.text, image, language, region, llm, tavily, mock=MOCK or not llm.configured):
                 yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
         except Exception as ex:
             log.exception("analysis failed")

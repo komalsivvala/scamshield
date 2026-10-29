@@ -100,7 +100,10 @@ async function analyze() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, image: imageData, language: $("lang").value, region: $("region").value }),
     });
-    if (!resp.ok || !resp.body) throw new Error(`Server error ${resp.status}`);
+    if (!resp.ok || !resp.body) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.detail || `Server error ${resp.status}`);
+    }
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
