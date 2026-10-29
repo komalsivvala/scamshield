@@ -41,7 +41,17 @@ Use [] for empty lists. Do not invent entities that are not in the message."""
 VERDICT_SYSTEM = """You are ScamShield, a careful fraud investigator protecting ordinary people.
 Weigh the message, the deterministic rule signals and the live web evidence, then decide.
 Rules:
-- Be decisive but honest. Genuine bank OTP / delivery / transaction alerts that ask for nothing are LIKELY_SAFE.
+- Judge THIS MESSAGE: is it itself a scam attempt? Calibrate:
+  SCAM = the message tries to get money, credentials, codes or remote access through deception or impersonation.
+  SUSPICIOUS = real warning signs but no clear deceptive ask, or impersonation cannot be confirmed either way.
+  LIKELY_SAFE = an informational notification (OTP, debit/credit alert, delivery, bill reminder, appointment) that
+  asks for nothing risky, or a normal personal message. A genuine OTP or transaction alert is LIKELY_SAFE even if
+  the reader did not start the transaction; put that caveat in what_to_do ("if you didn't make this payment, call
+  the number on your card"), do NOT raise the verdict for it.
+- Trust "trust_signals" from the rule engine: a link on a verified official domain is genuine. Note Indian banks are
+  migrating to *.bank.in, and their older domains (e.g. hdfcbank.com, icicibank.com, sbi.co.in) remain official.
+- Do not treat a phone number as proof of fraud just because web results tie it to a different organisation unless
+  the evidence clearly shows it; toll-free numbers are often shared or listed by aggregators.
 - Cite evidence by id (E1, E2...) only when the evidence actually supports the point. Never invent sources.
 - If a link's domain differs from the official domain found in evidence, say so explicitly.
 - Absence of web reports is NOT proof of safety.
@@ -97,8 +107,8 @@ async def run(text: str, image_data_url: str | None, language: str, region: str,
         yield event("error", message="Please paste a message or upload a screenshot.")
         return
 
-    # 2. Deterministic checks + Nemotron Nano extraction run in parallel
-    yield event("step", id="extract", status="running", title="Extracting phone numbers, links & claims", agent="Nemotron Nano")
+    # 2. Deterministic checks + Nemotron Super extraction
+    yield event("step", id="extract", status="running", title="Extracting phone numbers, links & claims", agent="Nemotron Super")
     yield event("step", id="rules", status="running", title="Running fraud-pattern checks", agent="Rule engine")
     regex_entities = sig.extract_entities(text)
     rules = sig.analyze(text, regex_entities)
@@ -145,6 +155,7 @@ async def run(text: str, image_data_url: str | None, language: str, region: str,
         "extracted": extracted,
         "rule_signals": [{k: s[k] for k in ("severity", "title", "detail", "match")} for s in rules["signals"]],
         "rule_baseline_score": rules["score"],
+        "trust_signals": rules["trust"],
         "web_evidence": [{k: e[k] for k in ("id", "purpose", "title", "url", "snippet")} for e in evidence],
         "user_region": region,
     }
@@ -166,17 +177,18 @@ async def run(text: str, image_data_url: str | None, language: str, region: str,
     verdict["entities"] = entities
     yield event("verdict", **verdict)
 
-    # 5. Family explanation in the user's language (Nemotron Nano)
-    yield event("step", id="family", status="running", title=f"Explaining for family in {language}", agent="Nemotron Nano")
+    # 5. Family explanation in the user's language. Ultra without thinking: much better
+    #    Indic-language fluency than Super in our tests, at ~2-5s.
+    yield event("step", id="family", status="running", title=f"Explaining for family in {language}", agent="Nemotron Ultra")
     try:
-        fam, out = await llm.chat_json("fast", [
+        fam, out = await llm.chat_json("reason", [
             {"role": "system", "content": FAMILY_SYSTEM.format(language=language)},
             {"role": "user", "content": json.dumps({
                 "verdict": verdict["verdict"], "headline": verdict.get("headline"), "scam_type": verdict.get("scam_type"),
                 "red_flags": [f["flag"] for f in verdict.get("red_flags", [])], "what_to_do": verdict.get("what_to_do"),
                 "do_not": verdict.get("do_not"), "message_summary": extracted.get("summary") or text[:300],
             }, ensure_ascii=False)},
-        ], max_tokens=900, temperature=0.3)
+        ], max_tokens=900, temperature=0.3, think=False)
         yield event("step", id="family", status="done", title=f"Explaining for family in {language}", model=out["model"], ms=out["ms"])
         yield event("family", language=language, **fam)
     except Exception as ex:
@@ -241,7 +253,7 @@ def fallback_verdict(rules: dict) -> dict:
 async def _mock_run(text, language, region):
     """UI development mode: real rule engine, canned model/search output. Clearly labelled MOCK."""
     rules = sig.analyze(text)
-    for sid, title, agent in [("extract", "Extracting phone numbers, links & claims", "Nemotron Nano (MOCK)"),
+    for sid, title, agent in [("extract", "Extracting phone numbers, links & claims", "Nemotron Super (MOCK)"),
                               ("rules", "Running fraud-pattern checks", "Rule engine")]:
         yield event("step", id=sid, status="running", title=title, agent=agent)
     await asyncio.sleep(0.6 * MOCK_DELAY)

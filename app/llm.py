@@ -1,9 +1,11 @@
 """Nebius Token Factory client (OpenAI-compatible) with automatic Nemotron model resolution.
 
 ScamShield uses three NVIDIA Nemotron tiers, each for what it is good at:
-  fast   -> Nemotron Nano  : entity extraction, plain-language family explanations
-  reason -> Nemotron Ultra : evidence-weighing verdict (falls back to Super)
-  vision -> Nemotron Omni / VL : reading screenshots of messages (optional)
+  fast   -> Nemotron 3 Super (thinking off) : entity extraction, plain-language family explanations
+  reason -> Nemotron 3 Ultra (thinking on)  : evidence-weighing verdict
+  vision -> Nemotron VL / Omni              : reading screenshots of messages
+Super is preferred over Nano for "fast" because it measured ~0.8s vs ~6s median on Token Factory
+(eval/latency.md); Nano remains the fallback.
 """
 import json
 import os
@@ -16,7 +18,7 @@ BASE_URL = os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1"
 
 # Ordered preferences: first model id containing all tokens (case-insensitive) wins.
 PREFERENCES = {
-    "fast": [["nemotron-3", "nano"], ["nemotron", "nano"], ["nemotron-3", "super"], ["nemotron", "super"]],
+    "fast": [["nemotron-3", "super"], ["nemotron", "super"], ["nemotron-3", "nano"], ["nemotron", "nano"]],
     "reason": [["nemotron-3", "ultra"], ["nemotron", "ultra"], ["nemotron-3", "super"], ["nemotron", "super"]],
     "vision": [["nemotron", "omni"], ["nemotron", "vl"], ["nemotron", "vision"]],
 }
@@ -72,11 +74,13 @@ class TokenFactory:
             self.models["reason"] = self.models["fast"]
         return self.models
 
-    async def chat(self, role: str, messages: list, *, max_tokens=1500, temperature=0.2, json_mode=False) -> dict:
+    async def chat(self, role: str, messages: list, *, max_tokens=1500, temperature=0.2, json_mode=False, think=None) -> dict:
         model = self.models.get(role)
         if not model:
             raise LLMError(f"No Nemotron model resolved for role '{role}'")
         body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+        # Nemotron 3 reasoning toggle: think only where it pays off (the verdict).
+        body["chat_template_kwargs"] = {"enable_thinking": role == "reason" if think is None else think}
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         t0 = time.perf_counter()

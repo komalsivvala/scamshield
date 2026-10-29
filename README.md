@@ -23,7 +23,7 @@ ScamShield does that outside check automatically, and explains the result in the
         │
         ▼
  ┌──────────────────┐   ┌───────────────────────┐
- │ Nemotron vision  │──▶│ Nemotron Nano          │  extract sender, phone numbers, links,
+ │ Nemotron VL      │──▶│ Nemotron 3 Super       │  extract sender, phone numbers, links,
  │ (screenshot OCR) │   │ entity extraction      │  UPI IDs, pressure tactics, scam pattern
  └──────────────────┘   └───────────┬───────────┘
                                     │        ┌──────────────────────────┐
@@ -41,7 +41,7 @@ ScamShield does that outside check automatically, and explains the result in the
                      └─────────────┬────────────────────────────┘
                                    ▼
                      ┌───────────────────────────┐
-                     │ Nemotron Nano: family      │ simple explanation + WhatsApp warning
+                     │ Nemotron Ultra: family     │ simple explanation + WhatsApp warning
                      │ explanation, any language  │ in Hindi / Telugu / Tamil / …
                      └───────────────────────────┘
 ```
@@ -49,12 +49,14 @@ ScamShield does that outside check automatically, and explains the result in the
 Every step streams to the UI live, so the user sees *why*, not just *what*.
 
 ### Why multiple Nemotron models
-| Step | Model (auto-selected from your Token Factory catalogue) | Why |
-|---|---|---|
-| Screenshot reading | Nemotron Omni / VL | Most people *receive* scams as screenshots forwarded by family |
-| Entity extraction | **Nemotron Nano** | Fast structured JSON. Runs on every request, keeps cost low |
-| Verdict | **Nemotron 3 Ultra** (falls back to Super) | Weighs conflicting evidence, decides when "no reports found" ≠ safe |
-| Family explanation | **Nemotron Nano** | Fast, fluent multilingual rewriting |
+| Step | Model | Thinking | Why |
+|---|---|---|---|
+| Screenshot reading | **Nemotron 3.5 Super VL** | – | Most people *receive* scams as screenshots forwarded by family |
+| Entity extraction | **Nemotron 3 Super** | off | Fast structured JSON (~1 s). Benchmarked 8× faster than Nano on Token Factory |
+| Verdict | **Nemotron 3 Ultra** | **on** | Weighs conflicting evidence, decides when "no reports found" ≠ safe |
+| Family explanation | **Nemotron 3 Ultra** | off | Clearly better Telugu/Hindi than Super in side-by-side tests, still ~2–5 s |
+
+Models are auto-selected from your Token Factory catalogue at startup (`/v1/models`), and the Nemotron 3 reasoning toggle (`enable_thinking`) is set per call. We pay for reasoning tokens only where reasoning changes the answer. See [`eval/latency.md`](eval/latency.md).
 
 This follows the track guidance: *"Reach for Nemotron 3 Ultra when you need serious reasoning, and let Nano or Super handle the fast, everyday calls."*
 
@@ -71,14 +73,23 @@ This follows the track guidance: *"Reach for Nemotron 3 Ultra when you need seri
 The last 10 are a **hard set**, written *after* the rule engine was frozen, with no keyword giveaways: romance-investment, fake landlord deposit, wedding-invite APK, fake customer care.
 
 <!-- EVAL_RESULTS -->
-| System | Accuracy (all 50) | Hard-set accuracy |
-|---|---|---|
-| Rule engine only | 88% | 60% |
-| ScamShield (Nemotron + Tavily) | _running_ | _running_ |
+| System | Accuracy | Precision | Recall | F1 | Hard-set accuracy |
+|---|---|---|---|---|---|
+| Rule engine only | 88% | 100% | 77% | 0.87 | 60% |
+| **ScamShield (Nemotron + Tavily)** | **96%** | **93%** | **100%** | **0.96** | **90%** |
+
+- **Every scam caught (26/26)**, including all 5 hard-set scams. The rule engine missed 4 of those 5.
+- The 2 remaining errors are genuine messages labelled *Suspicious* (never *Scam*), the cautious direction for a safety tool.
+- Median end-to-end latency: **12.3 s** for 3–4 Nemotron calls plus up to 6 parallel Tavily searches.
+- Full results: [`eval/results.md`](eval/results.md) · model latency benchmark: [`eval/latency.md`](eval/latency.md)
+
+**What the first run taught us.** The first full run caught every scam but flagged 6 genuine messages. Two lessons:
+1. *The agent found a bug in our test data.* We had put HDFC's helpline number in a message signed "SBI". ScamShield searched the number, found it on HDFC's site, and flagged the impersonation, which is exactly what it is for. We fixed the data.
+2. *Calibration.* It treated a genuine OTP as suspicious ("someone may be using your card") and didn't know Indian banks' legacy domains stay official during the move to `.bank.in`. We added rule-engine **trust signals** (verified official domains, "do not share" warnings) and a clear SCAM / SUSPICIOUS / SAFE rubric. False positives dropped from 6 to 2.
 
 Reproduce: `python -m eval.run_eval` (full agent) or `python -m eval.run_eval --rules` (baseline, no keys).
 
-*Caveat: this is a small, hand-written development set. It shows the method and where each component adds value. It is not a field accuracy claim.*
+*Caveat: this is a small, hand-written set, and prompts were calibrated after seeing the first run's errors, so treat these as development numbers, not a field accuracy claim. Run it yourself, and add your own messages to `eval/dataset.jsonl`.*
 
 ## Run it locally
 
@@ -108,7 +119,7 @@ eval/           labelled dataset + evaluation script + results
 ```
 
 ## Built with
-- **NVIDIA Nemotron** (Nano, Ultra, Omni/VL) open models
+- **NVIDIA Nemotron 3** open models: Ultra (550B), Super (120B), Super VL (benchmarked Nano, Lightning)
 - **Nebius Token Factory**: OpenAI-compatible inference for every model call
 - **Tavily**: live web search for evidence
 - FastAPI · vanilla JS

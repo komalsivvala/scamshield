@@ -8,6 +8,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+try:  # trust the OS certificate store (corporate proxies / antivirus TLS inspection)
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 from fastapi import FastAPI  # noqa: E402
 from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402

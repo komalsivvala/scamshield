@@ -205,6 +205,20 @@ def analyze(text: str, entities: dict | None = None) -> dict:
         add("mobile_as_official", "medium", "Organisation using a personal mobile number",
             f"The message claims to be from {entities['brands_mentioned'][0].title()} but gives a personal 10-digit mobile number.")
 
+    # Trust signals: verifiable facts pointing toward genuine. Shown to the verdict model, not scored.
+    trust = []
+    for host in entities["domains"]:
+        for brand, officials in OFFICIAL_DOMAINS.items():
+            if any(host == d or host.endswith("." + d) for d in officials):
+                trust.append(f"Link {host} is a verified official {brand.upper()} domain "
+                             f"(official domains: {', '.join(officials)})")
+                break
+    if re.search(r"(do not|don't|never)\W+(share|disclose)|will never (call|ask)|never asks? for", text, re.IGNORECASE):
+        trust.append("Message warns the reader NOT to share codes/details. Typical of genuine bank notifications.")
+    if not entities["urls"] and not any(s["id"] in {"credential_request", "pin_to_receive", "remote_app", "advance_fee", "gift_card"} for s in signals):
+        if not re.search(r"\b(call|contact|whatsapp|click|pay|send|transfer|install|download|reply)\b", text, re.IGNORECASE):
+            trust.append("Message asks the reader to take no action.")
+
     weights = {"high": 30, "medium": 15, "low": 5}
     score = min(100, sum(weights[s["severity"]] for s in signals))
-    return {"signals": signals, "score": score, "entities": entities}
+    return {"signals": signals, "score": score, "entities": entities, "trust": trust}

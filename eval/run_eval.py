@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import app.main  # noqa: E402,F401  (applies truststore)
 from app import pipeline, signals  # noqa: E402
 from app.llm import TokenFactory  # noqa: E402
 from app.search import Tavily  # noqa: E402
