@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScamShield</title>
+  <meta name="description" content="Check any suspicious SMS, WhatsApp message or payment request in seconds. Powered by NVIDIA Nemotron on Nebius Token Factory and Tavily.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5.1 13.6 12 15 6.9-1.4 12-7.5 12-15V7z' fill='%2316a34a'/><path d='m11 16 4 4 7-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><path d="M16 2 4 7v8c0 7.5 5.1 13.6 12 15 6.9-1.4 12-7.5 12-15V7z" fill="var(--brand)"/><path d="m11 16 4 4 7-8" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>ScamShield</span>
+    </div>
+    <div class="powered">NVIDIA Nemotron · Nebius Token Factory · Tavily</div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="layout">
+    <section class="panel input-panel">
+      <h1>Got a message that feels off?</h1>
+      <p class="lede">Paste it or upload a screenshot. ScamShield investigates it like a fraud analyst would, then explains the answer so the whole family can understand it.</p>
+
+      <label class="field-label" for="msg">Suspicious message</label>
+      <textarea id="msg" rows="7" placeholder="e.g. Dear customer, your electricity will be disconnected tonight at 9:30pm. Call our officer 98XXXXXX10 immediately…"></textarea>
+
+      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Upload a screenshot">
+        <input id="file" type="file" accept="image/*" hidden>
+        <div id="dropText"><strong>Add a screenshot</strong> · drag &amp; drop, paste, or click</div>
+        <div id="preview" class="preview" hidden><img id="previewImg" alt="Screenshot preview"><button id="clearImg" class="link" type="button">Remove</button></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label class="field-label" for="lang">Explain in</label>
+          <select id="lang">
+            <option>English</option><option>Hindi</option><option>Telugu</option><option>Tamil</option>
+            <option>Kannada</option><option>Marathi</option><option>Bengali</option><option>Malayalam</option>
+            <option>Gujarati</option><option>Spanish</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="region">I live in</label>
+          <select id="region"><option>India</option><option>United States</option><option>United Kingdom</option><option>Other</option></select>
+        </div>
+      </div>
+
+      <button id="go" class="primary" type="button">
+        <span class="btn-label">Check this message</span>
+      </button>
+
+      <div class="samples">
+        <span class="field-label">Try an example</span>
+        <div id="sampleList" class="chips"></div>
+      </div>
+    </section>
+
+    <section class="panel output-panel" aria-live="polite">
+      <div id="empty" class="empty">
+        <div class="empty-art" aria-hidden="true">🛡️</div>
+        <h2>How ScamShield checks a message</h2>
+        <ol class="howto">
+          <li><b>Reads</b> the message or screenshot: Nemotron Nano and Nemotron vision</li>
+          <li><b>Checks</b> it against known fraud patterns and fake bank websites</li>
+          <li><b>Investigates</b> phone numbers, links and the real company online with Tavily</li>
+          <li><b>Decides</b> with the evidence in front of it: Nemotron Ultra</li>
+          <li><b>Explains</b> the result in your family's language</li>
+        </ol>
+      </div>
+
+      <div id="trace" class="trace" hidden>
+        <h3 class="section-title">Investigation <span id="totalTime" class="muted"></span></h3>
+        <ol id="steps" class="steps"></ol>
+      </div>
+
+      <div id="result" hidden>
+        <div id="verdictCard" class="verdict">
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 120 70" class="gauge" aria-hidden="true">
+              <path d="M10 62 A50 50 0 0 1 110 62" class="gauge-bg"/>
+              <path id="gaugeArc" d="M10 62 A50 50 0 0 1 110 62" class="gauge-fg"/>
+            </svg>
+            <div class="gauge-num"><span id="score">0</span><small>risk</small></div>
+          </div>
+          <div class="verdict-text">
+            <div id="verdictLabel" class="verdict-label"></div>
+            <div id="headline" class="headline"></div>
+            <div id="scamType" class="muted small"></div>
+          </div>
+        </div>
+        <div id="guardrail" class="note" hidden></div>
+
+        <div id="familyCard" class="card family" hidden>
+          <div class="card-head"><h3>For your family <span id="familyLang" class="pill"></span></h3></div>
+          <p id="familyText" class="family-text"></p>
+          <div class="share-box">
+            <p id="shareText"></p>
+            <div class="actions">
+              <a id="waShare" class="wa" target="_blank" rel="noopener">Share on WhatsApp</a>
+              <button id="copyShare" class="ghost" type="button">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Red flags</h3>
+            <ul id="flags" class="flags"></ul>
+            <div id="safeWrap" hidden><h4>Signs it may be genuine</h4><ul id="safe" class="plain"></ul></div>
+          </div>
+          <div class="card">
+            <h3>What to do now</h3>
+            <ul id="todo" class="todo"></ul>
+            <h4>Do NOT</h4>
+            <ul id="dont" class="dont"></ul>
+            <div id="officialWrap" hidden><h4>Use the official channel</h4><p id="official"></p></div>
+            <div id="helpWrap" hidden><h4>Report it</h4><ul id="help" class="plain"></ul></div>
+          </div>
+        </div>
+
+        <details class="card evidence">
+          <summary><h3>Web evidence <span id="evCount" class="pill"></span></h3></summary>
+          <ol id="evidence" class="ev-list"></ol>
+        </details>
+      </div>
+
+      <div id="error" class="error" hidden></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    ScamShield gives guidance, not a guarantee. When in doubt, contact the organisation using its official app or website.
+    · <a href="https://github.com/" id="repoLink" target="_blank" rel="noopener">Source code</a>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
