@@ -94,7 +94,7 @@ Reproduce: `python -m eval.run_eval` (full agent) or `python -m eval.run_eval --
 ## Run it locally
 
 ```bash
-git clone <this repo> && cd scamshield
+git clone https://github.com/komalsivvala/scamshield && cd scamshield
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env        # add NEBIUS_API_KEY and TAVILY_API_KEY
@@ -103,6 +103,8 @@ uvicorn app.main:app --reload --port 8000
 Open http://localhost:8000. Try `http://localhost:8000/?try=0` to auto-run an example.
 
 On startup ScamShield calls Token Factory's `/v1/models` and picks the best available Nemotron model for each role. Pin specific ids with `FAST_MODEL`, `REASON_MODEL` and `VISION_MODEL` if you prefer.
+
+Or simply `python app.py` (serves on port 7860).
 
 **Docker:** `docker build -t scamshield . && docker run -p 7860:7860 --env-file .env scamshield`
 
